@@ -13,6 +13,13 @@ DATA_DIR = BASE_DIR / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 VECTOR_DIR = DATA_DIR / "vectors"
+# Add these to your config.py
+CACHE_DIR = DATA_DIR / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Model settings
+N_GPU_LAYERS = int(os.getenv("N_GPU_LAYERS", "1"))
+MODEL_CACHE_DIR = str(CACHE_DIR / "models")
 
 # Model settings
 MODEL_PATH = os.getenv("MODEL_PATH", "models/mistral-7b-instruct-v0.2.Q4_K_M.gguf")
