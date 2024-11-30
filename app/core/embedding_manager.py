@@ -1,39 +1,47 @@
-from pathlib import Path
+import os
 from typing import List, Dict
 import chromadb
-from sentence_transformers import SentenceTransformer
-from ..config import CHROMA_DB_DIR, EMBEDDING_MODEL
+from chromadb.config import Settings
+from ..config import CHROMA_DB_DIR
 
 class EmbeddingManager:
     def __init__(self):
-        self.model = SentenceTransformer(EMBEDDING_MODEL)
-        # Updated Chroma client configuration
-        self.client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
-        self.collection = self.client.get_or_create_collection("documents")
-
-    def add_documents(self, documents: List[Dict[str, str]], source: str):
-        """Add documents to the vector store."""
-        embeddings = self.model.encode([doc['content'] for doc in documents])
+        # Ensure the directory exists with proper permissions
+        os.makedirs(CHROMA_DB_DIR, exist_ok=True)
         
+        # Set proper permissions for the directory
+        os.chmod(CHROMA_DB_DIR, 0o777)
+        
+        # Initialize ChromaDB with persistent storage
+        self.client = chromadb.PersistentClient(
+            path=CHROMA_DB_DIR,
+            settings=Settings(
+                allow_reset=True,
+                anonymized_telemetry=False
+            )
+        )
+        
+        # Get or create collection
+        self.collection = self.client.get_or_create_collection(
+            name="documents",
+            metadata={"hnsw:space": "cosine"}
+        )
+
+    def add_documents(self, documents: List[Dict], source: str):
+        """Add documents to the collection."""
+        if not documents:
+            return
+            
+        # Generate unique IDs for each chunk
+        ids = [f"{source}_{i}" for i in range(len(documents))]
+        
+        # Extract text content and metadata
+        texts = [doc['content'] for doc in documents]
+        metadatas = [{'source': source} for _ in documents]
+        
+        # Add to collection
         self.collection.add(
-            embeddings=embeddings.tolist(),
-            documents=[doc['content'] for doc in documents],
-            metadatas=[doc['metadata'] for doc in documents],
-            ids=[f"{source}-{doc['metadata']['chunk_index']}" for doc in documents]
+            ids=ids,
+            documents=texts,
+            metadatas=metadatas
         )
-
-    def query_similar(self, query: str, n_results: int = 5) -> List[Dict]:
-        """Query similar documents."""
-        query_embedding = self.model.encode([query]).tolist()
-        results = self.collection.query(
-            query_embeddings=query_embedding,
-            n_results=n_results
-        )
-        
-        return [
-            {
-                'content': doc,
-                'metadata': metadata
-            }
-            for doc, metadata in zip(results['documents'][0], results['metadatas'][0])
-        ]
